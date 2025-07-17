@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Productivity Blueprint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Harmony -->
+    <!-- Application Structure Plan: The application is designed as an interactive daily dashboard centered around a vertical timeline. This structure was chosen because a chronological flow is the most intuitive way to present a daily schedule. Key interactions include: 1) A filterable timeline to switch between 'All', 'Work & Study', and 'Health' views, allowing users to focus on specific aspects of their day. 2) An interactive donut chart providing a high-level summary of time allocation, making the day's balance instantly clear. 3) Checkable list items for each task, transforming the static report into a dynamic, actionable tool the user can engage with throughout the day. This design enhances usability and encourages active participation rather than passive reading. -->
+    <!-- Visualization & Content Choices: 1. Time Allocation (Report Info) -> Goal: Compare/Inform -> Viz: Donut Chart -> Interaction: Hover to see details -> Justification: Excellent for showing part-to-whole relationships of the 24-hour day. Library: Chart.js/Canvas. 2. Daily Schedule (Report Info) -> Goal: Organize/Inform -> Viz: Interactive Vertical Timeline -> Interaction: Checkboxes to mark completion, Filtering by category -> Justification: Most intuitive way to present a chronological plan; interactivity boosts engagement. Method: HTML/CSS/JS. 3. Hydration Plan (Report Info) -> Goal: Inform/Track -> Viz: Checkable List -> Interaction: Check off items -> Justification: Simple, clear, and actionable for a recurring task. Method: HTML/CSS/JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8;
+            color: #3f3c3a;
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+            color: #78716c; /* Warm Gray */
+        }
+        .nav-button.active, .nav-button:hover {
+            color: #A855F7; /* Purple Accent */
+            border-bottom-color: #A855F7;
+        }
+        .timeline-item-container:hover .timeline-item {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .timeline-item {
+             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .timeline-connector {
+            background-color: #d6d3d1; /* Lighter Warm Gray */
+        }
+        .task-checkbox:checked + label {
+            text-decoration: line-through;
+            color: #a8a29e;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="app-container" class="container mx-auto px-4 py-8 md:py-12">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-purple-600">Your Daily Blueprint</h1>
+            <p class="mt-2 text-lg text-stone-600">An interactive guide to peak productivity and wellness.</p>
+        </header>
+
+        <main>
+            <!-- Score & Streak Section -->
+            <section id="gamification-section" class="mb-12">
+                <div class="max-w-md mx-auto bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-stone-200/80 flex justify-around text-center">
+                    <div>
+                        <p class="text-lg font-medium text-stone-600">SCORE</p>
+                        <p id="score-value" class="text-5xl font-bold text-purple-600">0</p>
+                    </div>
+                    <div>
+                        <p class="text-lg font-medium text-stone-600">STREAK</p>
+                        <p id="streak-value" class="text-5xl font-bold text-green-500">0</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="dashboard" class="mb-12">
+                 <div class="bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-stone-200/80">
+                    <h2 class="text-2xl font-bold text-center mb-4 text-stone-800">How Your Day Is Spent</h2>
+                    <p class="text-center text-stone-500 mb-6 max-w-2xl mx-auto">This chart provides a visual breakdown of your 24-hour day, helping you see the balance between work, study, health, and rest at a glance.</p>
+                    <div class="chart-container">
+                        <canvas id="timeAllocationChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <nav class="flex justify-center border-b border-stone-200 mb-8">
+                <button data-filter="all" class="nav-button active font-semibold py-3 px-4 md:px-6 border-b-2 border-transparent">Full Schedule</button>
+                <button data-filter="work" class="nav-button font-semibold py-3 px-4 md:px-6 border-b-2 border-transparent">Work & Study</button>
+                <button data-filter="health" class="nav-button font-semibold py-3 px-4 md:px-6 border-b-2 border-transparent">Health & Wellness</button>
+                <button data-filter="hydration" class="nav-button font-semibold py-3 px-4 md:px-6 border-b-2 border-transparent">Hydration</button>
+            </nav>
+
+            <section id="schedule-section">
+                <div class="max-w-4xl mx-auto">
+                    <div id="timeline-container">
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const timelineData = [
+                { id: 'task-0', time: '6:30 AM', title: 'Wake Up & Hydrate', description: 'Start with a large glass of water.', category: 'health', icon: '💧' },
+                { id: 'task-1', time: '6:30 AM - 8:30 AM', title: 'Gym Session', description: 'Focus on your training goals to build resilience.', category: 'health', icon: '🏋️‍♂️' },
+                { id: 'task-2', time: '8:30 AM - 9:30 AM', title: 'Cool Down, Shower & Breakfast', description: 'Post-workout stretching and a protein-rich meal.', category: 'health', icon: '🚿' },
+                { id: 'task-3', time: '9:30 AM - 12:00 PM', title: 'Deep Work: Cybersecurity Skills', description: 'Focused learning using the Pomodoro Technique.', category: 'work', icon: '🧠' },
+                { id: 'task-4', time: '12:00 PM - 1:00 PM', title: 'Lunch & Recharge', description: 'A balanced meal away from your desk.', category: 'health', icon: '🥗' },
+                { id: 'task-5', time: '1:00 PM - 2:00 PM', title: 'Emails & Relaxation', description: 'Handle admin tasks and enjoy a personal interest.', category: 'work', icon: '✉️' },
+                { id: 'task-6', time: '2:00 PM - 3:30 PM', title: 'Work Session 1', description: 'Start with your most important tasks.', category: 'work', icon: '💻' },
+                { id: 'task-7', time: '3:30 PM - 3:45 PM', title: 'Break: Walk & Stretch', description: 'A short, brisk walk and simple stretches.', category: 'health', icon: '🚶‍♂️' },
+                { id: 'task-8', time: '3:45 PM - 5:15 PM', title: 'Work Session 2', description: 'Continue with your next priorities.', category: 'work', icon: '💻' },
+                { id: 'task-9', time: '5:15 PM - 5:30 PM', title: 'Break: Hydrate & Stretch', description: 'Refill water and look away from the screen.', category: 'health', icon: '💧' },
+                { id: 'task-10', time: '5:30 PM - 7:00 PM', title: 'Work Session 3', description: 'Push through the mid-evening with focus.', category: 'work', icon: '💻' },
+                { id: 'task-11', time: '7:00 PM - 7:45 PM', title: 'Dinner Break', description: 'Disconnect completely and eat a nourishing meal.', category: 'health', icon: '�️' },
+                { id: 'task-12', time: '7:45 PM - 9:15 PM', title: 'Work Session 4', description: 'Tasks requiring concentration but less creative energy.', category: 'work', icon: '💻' },
+                { id: 'task-13', time: '9:15 PM - 9:30 PM', title: 'Break: Final Stretch', description: 'A final short break to move your body.', category: 'health', icon: '🚶‍♂️' },
+                { id: 'task-14', time: '9:30 PM - 11:00 PM', title: 'Final Work Session', description: 'Wrap up tasks and plan for the next day.', category: 'work', icon: '💻' },
+                { id: 'task-15', time: '11:00 PM - 11:30 PM', title: 'Digital Detox & Wind-Down', description: 'No screens. Read, meditate, or journal.', category: 'health', icon: '🌙' },
+                { id: 'task-16', time: '11:30 PM', title: 'Optimal Bedtime', description: 'Aim for 7-8 hours of restorative sleep.', category: 'health', icon: '😴' },
+            ];
+
+            const hydrationData = [
+                { id: 'hydro-0', time: '6:30 AM', title: 'Upon waking', category: 'hydration', icon: '💧' },
+                { id: 'hydro-1', time: '7:30 AM', title: 'During your workout', category: 'hydration', icon: '💧' },
+                { id: 'hydro-2', time: '9:30 AM', title: 'With breakfast', category: 'hydration', icon: '💧' },
+                { id: 'hydro-3', time: '11:00 AM', title: 'Mid-morning', category: 'hydration', icon: '💧' },
+                { id: 'hydro-4', time: '12:30 PM', title: 'Before lunch', category: 'hydration', icon: '💧' },
+                { id: 'hydro-5', time: '2:00 PM', title: 'As you start work', category: 'hydration', icon: '💧' },
+                { id: 'hydro-6', time: '4:00 PM', title: 'Mid-afternoon', category: 'hydration', icon: '💧' },
+                { id: 'hydro-7', time: '6:30 PM', title: 'Before dinner', category: 'hydration', icon: '💧' },
+                { id: 'hydro-8', time: '8:30 PM', title: 'During evening work', category: 'hydration', icon: '💧' },
+                { id: 'hydro-9', time: '10:30 PM', title: 'Before wind-down', category: 'hydration', icon: '💧' },
+            ];
+
+            const container = document.getElementById('timeline-container');
+            const navButtons = document.querySelectorAll('.nav-button');
+            const scoreValueEl = document.getElementById('score-value');
+            const streakValueEl = document.getElementById('streak-value');
+
+            const saveState = () => {
+                const today = new Date().toISOString().split('T')[0];
+                const completedTasks = Array.from(document.querySelectorAll('.task-checkbox:checked')).map(cb => cb.id);
+                localStorage.setItem('productivityAppDate', today);
+                localStorage.setItem('productivityAppCompletedTasks', JSON.stringify(completedTasks));
+            };
+
+            const updateScoreAndStreak = () => {
+                const completedTasks = Array.from(document.querySelectorAll('.task-checkbox:checked'));
+                const streak = completedTasks.length;
+                const score = streak * 10;
+                scoreValueEl.textContent = score;
+                streakValueEl.textContent = streak;
+            };
+
+            const getCompletedTasks = () => {
+                const today = new Date().toISOString().split('T')[0];
+                const savedDate = localStorage.getItem('productivityAppDate');
+                if (today !== savedDate) {
+                    localStorage.setItem('productivityAppCompletedTasks', JSON.stringify([]));
+                    localStorage.setItem('productivityAppDate', today);
+                    return [];
+                }
+                return JSON.parse(localStorage.getItem('productivityAppCompletedTasks')) || [];
+            };
+
+            const createTimelineItem = (item, completedTasks) => {
+                const isChecked = completedTasks.includes(item.id);
+                return `
+                    <div class="timeline-item-container" data-category="${item.category}">
+                        <div class="relative flex items-start gap-4">
+                            <div class="timeline-connector absolute left-5 top-5 h-full w-0.5"></div>
+                            <div class="flex-shrink-0 w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center relative z-10">
+                                <span class="text-xl">${item.icon}</span>
+                            </div>
+                            <div class="flex-grow bg-white/60 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-stone-200/80 mb-6 w-full timeline-item">
+                                <input type="checkbox" id="${item.id}" class="task-checkbox hidden" ${isChecked ? 'checked' : ''}>
+                                <label for="${item.id}" class="flex items-center justify-between cursor-pointer w-full">
+                                    <div class="flex-grow">
+                                        <p class="font-semibold text-stone-800">${item.title}</p>
+                                        <p class="text-sm text-stone-500">${item.time}</p>
+                                        ${item.description ? `<p class="text-sm text-stone-600 mt-2">${item.description}</p>` : ''}
+                                    </div>
+                                    <div class="w-6 h-6 border-2 border-stone-300 rounded-full flex-shrink-0 ml-4 flex items-center justify-center transition-all checkmark-circle ${isChecked ? 'bg-purple-500 border-purple-500' : ''}">
+                                        <svg class="w-4 h-4 text-white fill-current ${isChecked ? '' : 'opacity-0'} transition-opacity" viewBox="0 0 20 20"><path d="M0 11l2-2 5 5L18 3l2 2L7 18z"/></svg>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            };
+
+            const renderTimeline = (filter) => {
+                container.innerHTML = '';
+                let dataToRender;
+                let headerHTML = '';
+                const completedTasks = getCompletedTasks();
+
+                if (filter === 'all') {
+                    dataToRender = timelineData;
+                    headerHTML = `<h2 class="text-2xl font-bold text-center mb-6 text-stone-800">Your Full Day Schedule</h2><p class="text-center text-stone-500 mb-8 max-w-2xl mx-auto">This is your complete timeline from morning to night. Each item can be checked off as you complete it, turning your plan into an active to-do list for the day.</p>`;
+                } else if (filter === 'hydration') {
+                    dataToRender = hydrationData;
+                    headerHTML = `<h2 class="text-2xl font-bold text-center mb-6 text-stone-800">All-Day Hydration Plan</h2><p class="text-center text-stone-500 mb-8 max-w-2xl mx-auto">Staying hydrated is crucial for focus and energy. Check off each glass of water to ensure you're meeting your daily goals.</p>`;
+                } else {
+                    const isWork = filter === 'work';
+                    dataToRender = timelineData.filter(item => item.category === filter);
+                    const title = isWork ? "Work & Study Focus" : "Health & Wellness Activities";
+                    const description = isWork ? "Here are your dedicated blocks for professional work and skill development." : "This view highlights all activities related to your physical and mental well-being.";
+                    headerHTML = `<h2 class="text-2xl font-bold text-center mb-6 text-stone-800">${title}</h2><p class="text-center text-stone-500 mb-8 max-w-2xl mx-auto">${description}</p>`;
+                }
+                
+                container.innerHTML = headerHTML + dataToRender.map(item => createTimelineItem(item, completedTasks)).join('');
+                addEventListeners();
+                updateScoreAndStreak();
+            };
+
+            const addEventListeners = () => {
+                document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const checkmarkCircle = this.nextElementSibling.querySelector('.checkmark-circle');
+                        const checkmarkSVG = checkmarkCircle.querySelector('svg');
+                        if (this.checked) {
+                            checkmarkSVG.classList.remove('opacity-0');
+                            checkmarkCircle.classList.add('bg-purple-500', 'border-purple-500');
+                        } else {
+                            checkmarkSVG.classList.add('opacity-0');
+                            checkmarkCircle.classList.remove('bg-purple-500', 'border-purple-500');
+                        }
+                        updateScoreAndStreak();
+                        saveState();
+                    });
+                });
+            };
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    navButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    const filter = button.getAttribute('data-filter');
+                    renderTimeline(filter);
+                });
+            });
+            
+            renderTimeline('all');
+
+            const ctx = document.getElementById('timeAllocationChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Work & Study', 'Sleep', 'Fitness & Health', 'Breaks & Meals'],
+                    datasets: [{
+                        label: 'Hours per Day',
+                        data: [7.5, 7.5, 3.25, 5.75],
+                        backgroundColor: ['rgba(168, 85, 247, 0.7)','rgba(96, 165, 250, 0.7)','rgba(52, 211, 153, 0.7)','rgba(251, 146, 60, 0.7)'],
+                        borderColor: ['#A855F7','#60A5FA','#34D399','#FB923C'],
+                        borderWidth: 1,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 20, font: { size: 14, family: 'Inter' }, color: '#3f3c3a' } },
+                        tooltip: {
+                            callbacks: { label: (c) => `${c.label}: ${c.parsed} hours` },
+                            backgroundColor: '#3f3c3a', titleFont: { size: 16, weight: 'bold'}, bodyFont: { size: 14 },
+                            padding: 10, cornerRadius: 8, displayColors: false
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
